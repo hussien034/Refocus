@@ -162,7 +162,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
             >
               <div className="pointer-events-none absolute inset-0 z-1 bg-linear-to-t from-[#101319]/65 via-transparent to-[#101319]/10" />
               <img
-                src="/digital-overload-brain.jpg"
+                src={`${import.meta.env.BASE_URL}digital-overload-brain.jpg`}
                 alt={isRtl ? "تصوير ثلاثي الأبعاد لدماغ بشبكة عصبية مضيئة على خلفية داكنة، يرمز إلى الإرهاق الرقمي" : "A detailed 3D wireframe brain on a dark background, symbolizing digital overload"}
                 className="aspect-[1.35/1] w-full object-cover sm:aspect-[1.45/1] lg:aspect-[1.15/1]"
               />

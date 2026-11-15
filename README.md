@@ -29,3 +29,9 @@ npm run build
 ```
 
 `.env` files, local data, dependencies, and generated build output are excluded from Git. Never commit API keys or other secrets.
+
+## GitHub Pages
+
+The workflow in `.github/workflows/deploy-pages.yml` tests and builds the app, then deploys the `dist` output whenever changes are pushed to `main`. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**.
+
+GitHub Pages hosts only the static frontend. Account authentication, server sync, and Gemini-backed coach requests require the Express server; deploy the full-stack app to a Node.js host to use those endpoints.

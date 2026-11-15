@@ -4,8 +4,11 @@ import path from 'path';
 import {defineConfig} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 
+const basePath = process.env.VITE_BASE_PATH || '/';
+
 export default defineConfig(() => {
   return {
+    base: basePath,
     plugins: [
       react(),
       tailwindcss(),
@@ -13,18 +16,18 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: ['icon.svg'],
         manifest: {
-          id: '/',
+          id: basePath,
           name: 'ReFocus — Digital Wellness',
           short_name: 'ReFocus',
           description: 'Take Back Your Attention. Less scrolling, more living.',
           theme_color: '#151820',
           background_color: '#151820',
           display: 'standalone',
-          start_url: '/',
-          scope: '/',
+          start_url: basePath,
+          scope: basePath,
           icons: [
             {
-              src: '/icon.svg',
+              src: `${basePath}icon.svg`,
               sizes: 'any',
               type: 'image/svg+xml',
               purpose: 'any',

@@ -84,7 +84,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ state, onUpdateSta
         rel="noopener noreferrer"
         aria-label={isAr ? "ابحث عن التعفن الدماغي على يوتيوب" : "Search YouTube for brain rot"}
         className="group relative block overflow-hidden rounded-3xl border border-[#363B46] bg-[#20232B] bg-cover bg-center p-6 text-white shadow-xl transition duration-300 hover:border-[#F4CE25]/50 hover:shadow-[0_20px_56px_rgba(0,0,0,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4CE25] focus-visible:ring-offset-2 focus-visible:ring-offset-[#191B20] sm:p-10"
-        style={{ backgroundImage: "url('/library-hero.svg')" }}
+        style={{ backgroundImage: `url('${import.meta.env.BASE_URL}library-hero.svg')` }}
       >
         <div className="absolute inset-0 bg-gradient-to-r from-[#191B20]/95 via-[#191B20]/75 to-[#191B20]/15 transition-colors group-hover:from-[#191B20]/90 group-hover:via-[#191B20]/65 group-hover:to-[#191B20]/10" />
         <div className="relative z-10 max-w-2xl space-y-3">
