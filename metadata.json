@@ -1,0 +1,6 @@
+{
+  "name": "ReFocus",
+  "description": "Take Back Your Attention. Less scrolling, more living — a calm, mobile-first digital wellness and AI coaching PWA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
