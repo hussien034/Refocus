@@ -10,6 +10,7 @@ import {
   idbRemoveUserState,
   idbSaveUserState,
 } from "./storage/indexedDb";
+import { getCopy } from "../i18n/translations";
 
 export { formatDateISO, getPastDateISO, getTodayISO };
 
@@ -205,6 +206,41 @@ export function saveGuestLanguage(language: Language): void {
 
 // --- Real Backend API Calls ---
 
+interface AuthApiResponse {
+  error?: string;
+  token?: string;
+  state?: AppState;
+}
+
+async function readAuthApiResponse(
+  res: Response,
+  language: Language
+): Promise<AuthApiResponse> {
+  const contentType = res.headers.get("content-type")?.toLowerCase() || "";
+  if (!contentType.includes("application/json") && !contentType.includes("+json")) {
+    throw new Error(getCopy(language).auth.errors.accountServiceUnavailable);
+  }
+
+  try {
+    return (await res.json()) as AuthApiResponse;
+  } catch {
+    throw new Error(getCopy(language).auth.errors.invalidServerResponse);
+  }
+}
+
+function requireAuthenticatedResponse(
+  data: AuthApiResponse,
+  language: Language
+): asserts data is AuthApiResponse & { token: string; state: AppState } {
+  if (
+    typeof data.token !== "string" ||
+    !data.state ||
+    typeof data.state.user?.id !== "string"
+  ) {
+    throw new Error(getCopy(language).auth.errors.invalidServerResponse);
+  }
+}
+
 export async function signupAccount(params: {
   name: string;
   email: string;
@@ -216,10 +252,11 @@ export async function signupAccount(params: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
-  const data = await res.json();
+  const data = await readAuthApiResponse(res, params.language);
   if (!res.ok) {
     throw new Error(data.error || "Sign up failed.");
   }
+  requireAuthenticatedResponse(data, params.language);
   const fullState = normalizeAppState({ ...data.state, isAuthenticated: true });
   setActiveSession({ token: data.token, userId: fullState.user.id });
   await idbSaveUserState(fullState.user.id, fullState, new Date().toISOString());
@@ -236,10 +273,11 @@ export async function loginAccount(params: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
-  const data = await res.json();
+  const data = await readAuthApiResponse(res, params.language);
   if (!res.ok) {
     throw new Error(data.error || "Log in failed.");
   }
+  requireAuthenticatedResponse(data, params.language);
   const fullState = normalizeAppState({ ...data.state, isAuthenticated: true });
   setActiveSession({ token: data.token, userId: fullState.user.id });
   await idbSaveUserState(fullState.user.id, fullState, new Date().toISOString());
@@ -256,7 +294,7 @@ export async function resetAccountPassword(params: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
-  const data = await res.json();
+  const data = await readAuthApiResponse(res, params.language);
   if (!res.ok) {
     throw new Error(data.error || "Password reset failed.");
   }

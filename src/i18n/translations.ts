@@ -68,6 +68,10 @@ export const TRANSLATIONS = {
         nameRequired: "Please enter your first name.",
         emailInvalid: "Please enter a valid email address.",
         passwordShort: "Password must be at least 6 characters.",
+        accountServiceUnavailable:
+          "The account service isn't available at this address. GitHub Pages hosts only the app frontend; sign in using the full-stack app URL.",
+        invalidServerResponse:
+          "The account service returned an invalid response. Please try again or contact support.",
       },
     },
     onboarding: {
@@ -736,6 +740,10 @@ export const TRANSLATIONS = {
         nameRequired: "يرجى إدخال اسمك الأول.",
         emailInvalid: "يرجى إدخال بريد إلكتروني صحيح.",
         passwordShort: "يجب أن تكون كلمة المرور 6 أحرف على الأقل.",
+        accountServiceUnavailable:
+          "خدمة الحسابات غير متاحة على هذا الرابط. يستضيف GitHub Pages واجهة التطبيق فقط؛ سجّل الدخول من رابط النسخة المتصلة بالخادم.",
+        invalidServerResponse:
+          "أعادت خدمة الحسابات استجابة غير صالحة. يرجى المحاولة مجدداً أو التواصل مع الدعم.",
       },
     },
     onboarding: {

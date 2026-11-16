@@ -16,6 +16,7 @@ import {
 import { buildSmartLocalReply, CoachContextPayload } from "../server/coachEngine";
 import { mergeSyncOperationsIntoState, PersistedUserState } from "../server/userStore";
 import { TRANSLATIONS } from "../src/i18n/translations";
+import { loginAccount } from "../src/services/storageService";
 import { AppState, Habit } from "../src/types/refocus";
 
 function buildBaseAppState(todayISO: string = "2026-06-17"): AppState {
@@ -562,6 +563,24 @@ test("Server sync preserves existing sessions/habits on onboarding preference up
 // =========================================================================
 // 7. EN vs AR TRANSLATION KEY PARITY AUDIT
 // =========================================================================
+
+test("login explains when a static host returns HTML instead of the account API", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response("<html><body>Not found</body></html>", {
+      status: 404,
+      headers: { "Content-Type": "text/html" },
+    });
+
+  try {
+    await assert.rejects(
+      loginAccount({ email: "user@example.com", password: "password", language: "ar" }),
+      new RegExp(TRANSLATIONS.ar.auth.errors.accountServiceUnavailable)
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 function collectTranslationPaths(obj: unknown, prefix: string = ""): string[] {
   if (Array.isArray(obj)) {
