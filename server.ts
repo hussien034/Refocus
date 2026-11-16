@@ -49,6 +49,34 @@ function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
 
 async function createServer() {
   const app = express();
+  const allowedOrigins = new Set(
+    (process.env.CORS_ORIGIN || "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+  );
+  if (process.env.NODE_ENV !== "production") {
+    allowedOrigins.add("http://localhost:3000");
+    allowedOrigins.add("http://localhost:5173");
+    allowedOrigins.add("http://127.0.0.1:3000");
+    allowedOrigins.add("http://127.0.0.1:5173");
+  }
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const origin = req.get("Origin");
+    if (!origin) {
+      if (req.method === "OPTIONS") return res.sendStatus(204);
+      return next();
+    }
+    if (!allowedOrigins.has(origin)) {
+      return res.status(403).json({ error: "This app origin is not allowed." });
+    }
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+    next();
+  });
   app.use(express.json({ limit: "2mb" }));
 
   app.get("/api/health", (_req: Request, res: Response) => {
@@ -214,6 +242,11 @@ async function createServer() {
 
   // --- Server-Side Gemini AI Coach (English & Arabic) ---
   app.post("/api/coach", async (req: Request, res: Response) => {
+    if (!hasValidGeminiKey()) {
+      return res.status(503).json({
+        error: "AI Coach is not configured. Set GEMINI_API_KEY on the backend.",
+      });
+    }
     try {
       const { message, history = [], context } = req.body as {
         message: string;
@@ -241,6 +274,11 @@ async function createServer() {
   });
 
   app.post("/api/coach/weekly-insight", async (req: Request, res: Response) => {
+    if (!hasValidGeminiKey()) {
+      return res.status(503).json({
+        error: "AI Coach is not configured. Set GEMINI_API_KEY on the backend.",
+      });
+    }
     try {
       const { context } = req.body as { context: CoachContextPayload };
       if (!context) {

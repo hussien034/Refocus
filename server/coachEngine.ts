@@ -732,10 +732,7 @@ export async function generateCoachReply(params: {
   const replyInArabic = context?.language === "ar" || containsArabic(message);
 
   if (!hasValidGeminiKey()) {
-    return {
-      ...buildSmartLocalReply(message, history, context, replyInArabic),
-      source: "local-coach",
-    };
+    throw new Error("GEMINI_API_KEY is not configured.");
   }
 
   try {
@@ -768,10 +765,7 @@ export async function generateCoachReply(params: {
 
     const parsed = response.text ? parseCoachModelPayload(response.text) : null;
     if (!parsed) {
-      return {
-        ...buildSmartLocalReply(message, history, context, replyInArabic),
-        source: "local-coach",
-      };
+      throw new Error("Gemini returned an empty or invalid coaching response.");
     }
 
     return {
@@ -781,10 +775,7 @@ export async function generateCoachReply(params: {
     };
   } catch (err) {
     console.error("[coachEngine] Gemini API error:", err);
-    return {
-      ...buildSmartLocalReply(message, history, context, replyInArabic),
-      source: "local-coach",
-    };
+    throw new Error("Gemini could not generate a coaching response.", { cause: err });
   }
 }
 
@@ -795,10 +786,7 @@ export async function generateWeeklyCoachInsight(
   const { topApp, topMins } = summarizeTopApps(context);
 
   if (!hasValidGeminiKey()) {
-    const report = replyInArabic
-      ? `ملخصك السلوكي يا ${context.userName}:\n• حافظت على سلسلة التزام لمدة ${context.streakDays} أيام وسجّلت ${context.todayFocusMinutes} دقيقة تركيز اليوم (${context.completedHabitsCount} من ${context.totalHabitsCount} عادات مكتملة).${topApp ? `\n• الملاحظة الأهم: ${topApp} استهلك ${topMins} دقيقة في سجلاتك الأخيرة — تقليل 15 دقيقة منه يومياً سيمنحك مساحة ممتازة لعاداتك.` : ""}\n• تحدي الأسبوع القادم: احمِ أول 20 دقيقة من صباحك قبل فتح أي تطبيق تواصل.`
-      : `Weekly Behavioral Summary for ${context.userName}:\n• You are maintaining a ${context.streakDays}-day streak with ${context.todayFocusMinutes} focus minutes today (${context.completedHabitsCount}/${context.totalHabitsCount} habits completed).${topApp ? `\n• Key observation: ${topApp} accounted for ${topMins} logged minutes recently — shifting 15 minutes away from it creates easy room for offline habits.` : ""}\n• Next week's micro-challenge: keep your first 20 morning minutes free of social feeds.`;
-    return { report, source: "local-coach" };
+    throw new Error("GEMINI_API_KEY is not configured.");
   }
 
   try {
@@ -823,21 +811,12 @@ Generate a concise, encouraging Weekly Digital Wellness Report (3 short bullet p
       },
     });
 
-    return {
-      report:
-        response.text?.trim() ||
-        (replyInArabic
-          ? "استمر في بناء عادات تركيز هادئة ومستدامة يوماً بعد يوم."
-          : "Keep building calm, steady focus routines one day at a time."),
-      source: "gemini",
-    };
+    if (!response.text?.trim()) {
+      throw new Error("Gemini returned an empty weekly insight.");
+    }
+    return { report: response.text.trim(), source: "gemini" };
   } catch (err) {
     console.error("[coachEngine] Weekly insight error:", err);
-    return {
-      report: replyInArabic
-        ? "تعذر الاتصال بمحرك Gemini حالياً. استمر في متابعة دقائق تركيزك وعاداتك اليومية."
-        : "Unable to reach Gemini right now. Keep tracking your focus minutes and daily habits.",
-      source: "local-coach",
-    };
+    throw new Error("Gemini could not generate the weekly insight.", { cause: err });
   }
 }

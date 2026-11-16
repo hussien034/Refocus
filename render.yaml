@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: refocus-ai-coach-hussien034
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev --legacy-peer-deps && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGIN
+        value: https://hussien034.github.io
+      - key: GEMINI_API_KEY
+        sync: false

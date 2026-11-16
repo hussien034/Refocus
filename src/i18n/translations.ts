@@ -444,8 +444,8 @@ export const TRANSLATIONS = {
     coach: {
       title: "ReFocus AI Coach",
       subtitle: "Supportive digital wellness guidance",
-      aiLabel: "AI-generated response · Educational & coaching guidance only, not medical advice.",
-      fallbackLabel: "Local Coach Preview · Connect GEMINI_API_KEY in Secrets for live Gemini responses.",
+      aiLabel: "Gemini AI coaching · Educational support only, not medical advice.",
+      fallbackLabel: "Powered by Gemini AI · Personalized using your saved progress.",
       suggestedTitle: "Suggested questions",
       prompts: [
         "How can I stop scrolling before bedtime?",
@@ -557,6 +557,7 @@ export const TRANSLATIONS = {
       weeklyAiLocked: "Available in Premium Demo. Activate the free demo preview in Profile to generate personalized weekly insights.",
       weeklyAiGenerate: "Generate Weekly Report",
       weeklyAiGenerating: "Analyzing your past 7 days...",
+      weeklyAiError: "Could not generate the Gemini report.",
       noteNoScore: "ReFocus tracks real habits and minutes rather than invented brain or medical scores.",
     },
     review: {
@@ -1122,8 +1123,8 @@ export const TRANSLATIONS = {
     coach: {
       title: "مدرب ReFocus الذكي",
       subtitle: "توجيه داعم للرفاهية الرقمية",
-      aiLabel: "إجابة مولّدة بالذكاء الاصطناعي · إرشاد تدريبي وتوعوي فقط وليس تشخيصاً طبياً.",
-      fallbackLabel: "معاينة المدرب المحلي · أضف GEMINI_API_KEY في الإعدادات لتفعيل Gemini الحي.",
+      aiLabel: "إرشاد مدرب Gemini الذكي · دعم توعوي فقط وليس تشخيصاً طبياً.",
+      fallbackLabel: "مدعوم بذكاء Gemini · إرشاد مخصص وفق بياناتك المحفوظة.",
       suggestedTitle: "أسئلة مقترحة",
       prompts: [
         "كيف أتوقف عن التصفح قبل النوم؟",
@@ -1208,6 +1209,7 @@ export const TRANSLATIONS = {
       weeklyAiLocked: "متاح في معاينة بريميوم. فعّل المعاينة المجانية من صفحة حسابي لتوليد تقارير أسبوعية مخصصة.",
       weeklyAiGenerate: "توليد التقرير الأسبوعي",
       weeklyAiGenerating: "جاري تحليل آخر 7 أيام...",
+      weeklyAiError: "تعذّر إنشاء تقرير Gemini.",
       noteNoScore: "يقيس ReFocus عاداتك ودقائقك الفعلية بدلاً من اختراع درجات طبية أو عقلية وهمية.",
     },
     library: {

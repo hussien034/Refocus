@@ -43,6 +43,7 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
   const [customStart, setCustomStart] = useState(() => getPastDateISO(13, today));
   const [customEnd, setCustomEnd] = useState(today);
   const [weeklyReport, setWeeklyReport] = useState<string | null>(null);
+  const [weeklyReportError, setWeeklyReportError] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
 
   const isPremium = state.user.plan === "premium";
@@ -78,6 +79,7 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
 
   const handleGenerateWeeklyReport = async () => {
     setReportLoading(true);
+    setWeeklyReportError(null);
     try {
       const todayFocusMinutes = state.sessions
         .filter((s) => !s.deletedAt && s.status !== "interrupted" && s.date === today)
@@ -109,6 +111,10 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
         habitInterests: state.onboarding.habitInterests,
       });
       setWeeklyReport(res.report);
+    } catch (error) {
+      setWeeklyReportError(
+        error instanceof Error ? error.message : t.analytics.weeklyAiError
+      );
     } finally {
       setReportLoading(false);
     }
@@ -545,6 +551,14 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
                     <div className="whitespace-pre-line rounded-2xl bg-[#151820] p-4 text-sm leading-relaxed text-[#F3F4F6] dark:bg-[#151820] dark:text-[#F3F4F6]">
                       {weeklyReport}
                     </div>
+                  )}
+                  {weeklyReportError && (
+                    <p
+                      role="alert"
+                      className="rounded-xl border border-red-900/50 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+                    >
+                      {weeklyReportError}
+                    </p>
                   )}
                   <button
                     type="button"

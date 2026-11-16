@@ -14,6 +14,11 @@ import {
   validateCoachActionCard,
 } from "../src/services/coachActionValidator";
 import { buildSmartLocalReply, CoachContextPayload } from "../server/coachEngine";
+import {
+  fetchWeeklyInsight,
+  resolveCoachApiUrl,
+  sendCoachMessage,
+} from "../src/services/coachService";
 import { mergeSyncOperationsIntoState, PersistedUserState } from "../server/userStore";
 import { TRANSLATIONS } from "../src/i18n/translations";
 import {
@@ -660,6 +665,94 @@ test("local accounts support signup, isolated login, and password reset without 
       Object.defineProperty(globalThis, "localStorage", originalStorage);
     } else {
       Reflect.deleteProperty(globalThis, "localStorage");
+    }
+  }
+});
+
+test("coach chat uses the configured Gemini API and reports service errors clearly", async () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { location: { hostname: "localhost" } },
+  });
+  globalThis.fetch = async (input) => {
+    requestedUrls.push(String(input));
+    if (String(input).endsWith("/api/coach/weekly-insight")) {
+      return Response.json({ report: "Gemini weekly report", source: "gemini" });
+    }
+    return Response.json({
+      reply: "A real Gemini response",
+      source: "gemini",
+      actionCard: {
+        id: "action",
+        type: "focus_session",
+        title: "Focus",
+        explanation: "Start a focus block.",
+        relevanceReason: "You asked for a focus block.",
+        durationMinutes: 15,
+        status: "pending",
+      },
+    });
+  };
+
+  const context: CoachContextPayload = {
+    userName: "Nadia",
+    language: "en",
+    dailyFocusTarget: 25,
+    todayFocusMinutes: 10,
+    todayScreenTimeMinutes: 45,
+    completedHabitsCount: 1,
+    totalHabitsCount: 2,
+    streakDays: 3,
+    recentHabits: [{ title: "Read", streak: 2, completedToday: false }],
+    recentScreenTime: [
+      {
+        appName: "TikTok",
+        category: "Short Video",
+        durationMinutes: 30,
+        date: "2026-11-16",
+      },
+    ],
+    goals: ["Improve focus"],
+    challenges: [],
+  };
+
+  try {
+    const reply = await sendCoachMessage("Help me focus", [], context);
+    assert.equal(reply.source, "gemini");
+    assert.equal(reply.reply, "A real Gemini response");
+    assert.equal(reply.actionCard?.type, "focus_session");
+
+    const report = await fetchWeeklyInsight(context);
+    assert.equal(report.source, "gemini");
+    assert.equal(report.report, "Gemini weekly report");
+    assert.deepEqual(requestedUrls, ["/api/coach", "/api/coach/weekly-insight"]);
+    assert.equal(
+      resolveCoachApiUrl("/api/coach", "https://refocus-api.onrender.com", "hussien034.github.io"),
+      "https://refocus-api.onrender.com/api/coach"
+    );
+    assert.throws(
+      () => resolveCoachApiUrl("/api/coach", undefined, "hussien034.github.io"),
+      /VITE_API_BASE_URL/
+    );
+
+    globalThis.fetch = async () =>
+      new Response("<html>Method Not Allowed</html>", {
+        status: 405,
+        headers: { "Content-Type": "text/html" },
+      });
+    await assert.rejects(
+      sendCoachMessage("Help me focus", [], context),
+      /Gemini could not generate a reply \(status 405\)/
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalWindow) {
+      Object.defineProperty(globalThis, "window", originalWindow);
+    } else {
+      Reflect.deleteProperty(globalThis, "window");
     }
   }
 });
