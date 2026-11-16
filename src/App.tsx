@@ -18,19 +18,18 @@ import {
 import { getCopy } from "./i18n/translations";
 import { addDaysISO, getDailyFocusMinutes, getTodayISO } from "./services/analytics/metricsEngine";
 import {
-  idbListUserOperations,
   idbLoadActiveTimer,
   idbSaveActiveTimer,
   idbSaveUserState,
 } from "./services/storage/indexedDb";
 import {
   createEmptyUnauthenticatedState,
-  deleteServerAccount,
-  fetchServerUserState,
+  deleteLocalAccount,
   getActiveSession,
   loadGuestLanguage,
   loadUserIndexedDbState,
   loadUserLocalCache,
+  LOCAL_SESSION_TOKEN,
   normalizeAppState,
   saveGuestLanguage,
   setActiveSession,
@@ -51,7 +50,6 @@ import {
   PersistedTimerState,
   PlanTier,
   ScreenTimeEntry,
-  SyncStatusSnapshot,
 } from "./types/refocus";
 
 import { FocusTimerScreen } from "./components/focus/FocusTimerScreen";
@@ -70,6 +68,7 @@ export default function App() {
   const initialCached = initialSession ? loadUserLocalCache(initialSession.userId) : null;
 
   const [authToken, setAuthToken] = useState<string | null>(() => initialSession?.token || null);
+  const shouldSyncWithServer = Boolean(authToken && authToken !== LOCAL_SESSION_TOKEN);
   const [state, setState] = useState<AppState>(
     () => initialCached || createEmptyUnauthenticatedState(loadGuestLanguage())
   );
@@ -90,7 +89,6 @@ export default function App() {
     )
   );
   const [restoredNotice, setRestoredNotice] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<SyncStatusSnapshot>(() => syncManager.getSnapshot());
 
   // Refs for atomic access inside timers, visibility handlers, and async callbacks
   const stateRef = useRef(state);
@@ -99,31 +97,10 @@ export default function App() {
   timerRef.current = timer;
   const completedSessionIdsRef = useRef<Set<string>>(new Set());
 
-  // Subscribe to offline-first sync engine & connectivity listeners
-  useEffect(() => {
-    const unsubscribe = syncManager.subscribe(setSyncStatus);
-    syncManager.setOnServerStateApplied((userId, serverState) => {
-      if (stateRef.current.user.id !== userId) return;
-      const normalized = normalizeAppState({ ...serverState, isAuthenticated: true });
-      setState(normalized);
-    });
-
-    const onOnline = () => void syncManager.handleConnectivityChange(true);
-    const onOffline = () => void syncManager.handleConnectivityChange(false);
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
-
-    return () => {
-      unsubscribe();
-      window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
-    };
-  }, []);
-
-  // Hydrate user state from IndexedDB + server reconciliation when session is active
+  // Restore the active browser-local account and its data.
   useEffect(() => {
     const activeMeta = getActiveSession();
-    if (!authToken || !activeMeta?.userId) {
+    if (!activeMeta?.userId) {
       void syncManager.setSession(null, null, null);
       return;
     }
@@ -138,46 +115,18 @@ export default function App() {
 
       if (idbStateRes?.state) {
         setState(idbStateRes.state);
-        setScreen((curr) =>
-          curr === "welcome" || curr === "auth"
-            ? idbStateRes.state.onboarding.completed
-              ? "home"
-              : "onboarding"
-            : curr
-        );
+        setScreen(idbStateRes.state.onboarding.completed ? "home" : "onboarding");
       }
 
-      // 2. Attach user session to sync manager
-      await syncManager.setSession(userId, authToken, idbStateRes?.lastSyncedAt || null);
+      // Accounts and progress stay on this device; no API sync is required.
+      await syncManager.setSession(
+        shouldSyncWithServer ? userId : null,
+        shouldSyncWithServer ? authToken : null,
+        idbStateRes?.lastSyncedAt || null
+      );
       if (cancelled) return;
 
-      // 3. Reconcile with server: flush pending offline ops first if any, else pull fresh server state
-      const pendingOps = await idbListUserOperations(userId);
-      if (cancelled) return;
-
-      if (pendingOps.length > 0 && navigator.onLine) {
-        await syncManager.flushQueue();
-      } else if (navigator.onLine) {
-        const serverState = await fetchServerUserState(authToken);
-        if (cancelled) return;
-        if (serverState) {
-          setState(serverState);
-          await syncManager.setSession(userId, authToken, new Date().toISOString());
-          setScreen((curr) =>
-            curr === "welcome" || curr === "auth"
-              ? serverState.onboarding.completed
-                ? "home"
-                : "onboarding"
-              : curr
-          );
-        } else if (!idbStateRes?.state && !initialCached) {
-          setActiveSession(null);
-          setAuthToken(null);
-          setScreen("welcome");
-        }
-      }
-
-      // 4. Restore persisted Focus Timer from IndexedDB for this user
+      // Restore persisted Focus Timer from IndexedDB for this user
       const savedTimer = await idbLoadActiveTimer(userId);
       if (cancelled) return;
 
@@ -207,7 +156,7 @@ export default function App() {
               sessions: [sessionToSave, ...stateRef.current.sessions],
             };
             setState(nextAppState);
-            await syncManager.enqueueOperation({
+            if (shouldSyncWithServer) await syncManager.enqueueOperation({
               userId,
               entityType: "focus_session",
               operationType: "complete",
@@ -243,16 +192,16 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [authToken]);
+  }, [authToken, shouldSyncWithServer]);
 
   // Persist local IndexedDB snapshot + guest language whenever state changes
   useEffect(() => {
-    if (!state.isAuthenticated || !state.user.id || !authToken) {
+    if (!state.isAuthenticated || !state.user.id) {
       saveGuestLanguage(state.language);
       return;
     }
     void idbSaveUserState(state.user.id, state);
-  }, [state, authToken]);
+  }, [state]);
 
   // Keep the app's single dark visual style and sync the selected language.
   useEffect(() => {
@@ -329,7 +278,7 @@ export default function App() {
             ...prev,
             sessions: [sessionToSave, ...prev.sessions],
           };
-          if (authToken) {
+          if (shouldSyncWithServer) {
             void syncManager.enqueueOperation({
               userId,
               entityType: "focus_session",
@@ -343,7 +292,7 @@ export default function App() {
         });
       }
     },
-    [authToken, commitTimerTransition]
+    [shouldSyncWithServer, commitTimerTransition]
   );
 
   // Timestamp-driven timer monitoring + page visibility / browser wake recalculation
@@ -417,7 +366,7 @@ export default function App() {
       nextAppState: AppState,
       entityId: string = "prefs"
     ) => {
-      if (!authToken || !nextAppState.user.id) return;
+      if (!shouldSyncWithServer || !nextAppState.user.id) return;
       void syncManager.enqueueOperation({
         userId: nextAppState.user.id,
         entityType: "preferences",
@@ -427,7 +376,7 @@ export default function App() {
         latestState: nextAppState,
       });
     },
-    [authToken]
+    [shouldSyncWithServer]
   );
 
   const toggleLanguage = () => {
@@ -449,7 +398,7 @@ export default function App() {
     isNewUser: boolean;
   }) => {
     const normalized = normalizeAppState({ ...userState, isAuthenticated: true });
-    setAuthToken(token);
+    setAuthToken(token || LOCAL_SESSION_TOKEN);
     setState(normalized);
     setTimer(
       createIdleTimerState(normalized.user.id, normalized.onboarding.dailyFocusTarget || 25)
@@ -465,7 +414,7 @@ export default function App() {
         user: { ...prev.user, name },
         onboarding,
       };
-      if (authToken && next.user.id) {
+      if (shouldSyncWithServer && next.user.id) {
         void syncManager.enqueueOperation({
           userId: next.user.id,
           entityType: "onboarding",
@@ -534,7 +483,7 @@ export default function App() {
         };
       });
       const next = { ...prev, habits: nextHabits };
-      if (authToken && prev.user.id) {
+      if (shouldSyncWithServer && prev.user.id) {
         void syncManager.enqueueOperation({
           userId: prev.user.id,
           entityType: "habit",
@@ -570,7 +519,7 @@ export default function App() {
         };
       });
       const next = { ...prev, habits: nextHabits };
-      if (authToken && prev.user.id) {
+      if (shouldSyncWithServer && prev.user.id) {
         void syncManager.enqueueOperation({
           userId: prev.user.id,
           entityType: "habit",
@@ -602,7 +551,7 @@ export default function App() {
     };
     setState((prev) => {
       const next = { ...prev, habits: [newHabit, ...prev.habits] };
-      if (authToken && prev.user.id) {
+      if (shouldSyncWithServer && prev.user.id) {
         void syncManager.enqueueOperation({
           userId: prev.user.id,
           entityType: "habit",
@@ -631,7 +580,7 @@ export default function App() {
         };
       });
       const next = { ...prev, habits: nextHabits };
-      if (authToken && prev.user.id) {
+      if (shouldSyncWithServer && prev.user.id) {
         void syncManager.enqueueOperation({
           userId: prev.user.id,
           entityType: "habit",
@@ -693,7 +642,7 @@ export default function App() {
           : h
       );
       const next = { ...prev, habits: nextHabits };
-      if (authToken && prev.user.id) {
+      if (shouldSyncWithServer && prev.user.id) {
         void syncManager.enqueueOperation({
           userId: prev.user.id,
           entityType: "habit",
@@ -718,7 +667,7 @@ export default function App() {
     };
     setState((prev) => {
       const next = { ...prev, screenTimeLogs: [newLog, ...prev.screenTimeLogs] };
-      if (authToken && prev.user.id) {
+      if (shouldSyncWithServer && prev.user.id) {
         void syncManager.enqueueOperation({
           userId: prev.user.id,
           entityType: "screen_time",
@@ -741,7 +690,7 @@ export default function App() {
           : l
       );
       const next = { ...prev, screenTimeLogs: nextLogs };
-      if (authToken && prev.user.id) {
+      if (shouldSyncWithServer && prev.user.id) {
         void syncManager.enqueueOperation({
           userId: prev.user.id,
           entityType: "screen_time",
@@ -776,7 +725,7 @@ export default function App() {
           ...prev,
           checkIns: prev.checkIns.map((c) => (c.id === target.id ? updatedCheckIn : c)),
         };
-        if (authToken && prev.user.id) {
+        if (shouldSyncWithServer && prev.user.id) {
           void syncManager.enqueueOperation({
             userId: prev.user.id,
             entityType: "check_in",
@@ -798,7 +747,7 @@ export default function App() {
         version: 1,
       };
       const next = { ...prev, checkIns: [newCheckIn, ...prev.checkIns] };
-      if (authToken && prev.user.id) {
+      if (shouldSyncWithServer && prev.user.id) {
         void syncManager.enqueueOperation({
           userId: prev.user.id,
           entityType: "check_in",
@@ -819,7 +768,7 @@ export default function App() {
         user: { ...prev.user, name },
         onboarding,
       };
-      if (authToken && prev.user.id) {
+      if (shouldSyncWithServer && prev.user.id) {
         void syncManager.enqueueOperation({
           userId: prev.user.id,
           entityType: "onboarding",
@@ -845,7 +794,7 @@ export default function App() {
         dailyScreenTimeGoalMinutes: goalMinutes,
       };
       const next: AppState = { ...prev, onboarding };
-      if (authToken && prev.user.id) {
+      if (shouldSyncWithServer && prev.user.id) {
         void syncManager.enqueueOperation({
           userId: prev.user.id,
           entityType: "onboarding",
@@ -1052,7 +1001,7 @@ export default function App() {
               ? parsed.customDailyChallenge
               : prev.customDailyChallenge,
         });
-        if (authToken && prev.user.id) {
+        if (shouldSyncWithServer && prev.user.id) {
           const { isAuthenticated: _ignored, ...persisted } = merged;
           void syncManager.enqueueOperation({
             userId: prev.user.id,
@@ -1072,9 +1021,7 @@ export default function App() {
   };
 
   const handleDeleteAccount = async () => {
-    if (authToken && state.user.id) {
-      await deleteServerAccount(authToken, state.user.id);
-    }
+    if (state.user.id) await deleteLocalAccount(state.user.id, state.language);
     await syncManager.setSession(null, null, null);
     setAuthToken(null);
     setState(createEmptyUnauthenticatedState(state.language));
@@ -1133,7 +1080,7 @@ export default function App() {
           setState((prev) => {
             const onboarding = { ...prev.onboarding, completed: true };
             const next = { ...prev, onboarding };
-            if (authToken && prev.user.id) {
+            if (shouldSyncWithServer && prev.user.id) {
               void syncManager.enqueueOperation({
                 userId: prev.user.id,
                 entityType: "onboarding",
@@ -1159,9 +1106,6 @@ export default function App() {
       state={state}
       activeScreen={screen}
       timerRunning={timer.status === "running"}
-      syncStatus={syncStatus}
-      onRetrySync={() => void syncManager.flushQueue()}
-      onResolveConflict={(operationId) => void syncManager.resolveConflictKeepServer(operationId)}
       onNavigate={(s) => setScreen(s)}
       onOpenUpgrade={() => {
         setScreen("profile");
@@ -1179,7 +1123,7 @@ export default function App() {
               setState((prev) => {
                 const date = prev.dailyChallengeCompletedDate === today ? null : today;
                 const next = { ...prev, dailyChallengeCompletedDate: date };
-                if (authToken && prev.user.id) {
+                if (shouldSyncWithServer && prev.user.id) {
                   void syncManager.enqueueOperation({
                     userId: prev.user.id,
                     entityType: "daily_challenge",

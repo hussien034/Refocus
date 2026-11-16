@@ -12,24 +12,18 @@ import {
   BarChart3,
   CalendarRange,
   Crown,
+  HardDrive,
   Sparkles,
 } from "lucide-react";
 import { getCopy } from "../../i18n/translations";
-import { AppScreen, AppState, SyncStatusSnapshot } from "../../types/refocus";
-import {
-  OfflineIndicator,
-  PWAInstallButton,
-  SyncStatusIndicator,
-} from "../common/PWAWidgets";
+import { AppScreen, AppState } from "../../types/refocus";
+import { OfflineIndicator, PWAInstallButton } from "../common/PWAWidgets";
 import { ReFocusLogo } from "../common/ReFocusLogo";
 
 interface AppShellProps {
   state: AppState;
   activeScreen: AppScreen;
   timerRunning: boolean;
-  syncStatus: SyncStatusSnapshot;
-  onRetrySync: () => void;
-  onResolveConflict: (operationId: string) => void;
   onNavigate: (screen: AppScreen) => void;
   onOpenUpgrade: () => void;
   children: React.ReactNode;
@@ -39,9 +33,6 @@ export const AppShell: React.FC<AppShellProps> = ({
   state,
   activeScreen,
   timerRunning,
-  syncStatus,
-  onRetrySync,
-  onResolveConflict,
   onNavigate,
   onOpenUpgrade,
   children,
@@ -151,12 +142,10 @@ export const AppShell: React.FC<AppShellProps> = ({
           </div>
 
           <div className="space-y-3 pt-4">
-            <SyncStatusIndicator
-              language={state.language}
-              syncStatus={syncStatus}
-              onRetrySync={onRetrySync}
-              onResolveConflict={onResolveConflict}
-            />
+            <div className="flex min-h-[44px] items-center gap-2 rounded-xl border border-[#363B46] bg-[#151820] px-3 py-2.5 text-xs font-medium text-[#A6AAB4] dark:border-[#3A404C] dark:bg-[#151820] dark:text-[#A6AAB4]">
+              <HardDrive className="h-3.5 w-3.5 text-[#F4CE25]" />
+              <span>{t.profile.localOnlyStorage}</span>
+            </div>
             <PWAInstallButton language={state.language} />
             {state.user.plan === "free" && (
               <button
@@ -180,12 +169,10 @@ export const AppShell: React.FC<AppShellProps> = ({
           <div className="mx-auto max-w-5xl">
             <div className="mb-6 flex items-center justify-between border-b border-[#363B46]/70 pb-4 lg:hidden">
               <ReFocusLogo variant="horizontal" size={28} />
-              <SyncStatusIndicator
-                language={state.language}
-                syncStatus={syncStatus}
-                onRetrySync={onRetrySync}
-                onResolveConflict={onResolveConflict}
-              />
+              <span className="inline-flex items-center gap-1.5 text-xs text-[#A6AAB4]">
+                <HardDrive className="h-3.5 w-3.5 text-[#F4CE25]" />
+                {t.profile.localOnlyStorage}
+              </span>
             </div>
             <MotionConfig reducedMotion="user">
               <AnimatePresence mode="wait" initial={false}>

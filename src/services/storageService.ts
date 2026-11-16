@@ -6,6 +6,7 @@ import {
   getTodayISO,
 } from "./analytics/metricsEngine";
 import {
+  idbClearUserQueue,
   idbLoadUserState,
   idbRemoveUserState,
   idbSaveUserState,
@@ -17,6 +18,18 @@ export { formatDateISO, getPastDateISO, getTodayISO };
 const ACTIVE_SESSION_KEY = "refocus_active_session_v1";
 const USER_STORAGE_PREFIX = "refocus_user_data_v1_";
 const GUEST_PREFS_KEY = "refocus_guest_prefs_v1";
+const LOCAL_ACCOUNTS_KEY = "refocus_local_accounts_v1";
+export const LOCAL_SESSION_TOKEN = "local";
+const PASSWORD_HASH_ITERATIONS = 120_000;
+
+interface LocalAccount {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  passwordSalt: string;
+  passwordHash: string;
+}
 
 export interface ActiveSessionMeta {
   token: string;
@@ -132,7 +145,7 @@ export function getActiveSession(): ActiveSessionMeta | null {
     const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as ActiveSessionMeta;
-    if (parsed?.token && parsed?.userId) return parsed;
+    if (parsed?.userId) return { token: LOCAL_SESSION_TOKEN, userId: parsed.userId };
     return null;
   } catch {
     return null;
@@ -204,41 +217,131 @@ export function saveGuestLanguage(language: Language): void {
   }
 }
 
-// --- Real Backend API Calls ---
+// --- Browser-local accounts ---
 
-interface AuthApiResponse {
-  error?: string;
-  token?: string;
-  state?: AppState;
-}
-
-async function readAuthApiResponse(
-  res: Response,
-  language: Language
-): Promise<AuthApiResponse> {
-  const contentType = res.headers.get("content-type")?.toLowerCase() || "";
-  if (!contentType.includes("application/json") && !contentType.includes("+json")) {
-    throw new Error(getCopy(language).auth.errors.accountServiceUnavailable);
+function readLocalAccounts(language: Language): LocalAccount[] {
+  let raw: string | null;
+  try {
+    raw = localStorage.getItem(LOCAL_ACCOUNTS_KEY);
+  } catch {
+    throw new Error(getCopy(language).auth.errors.localStorageUnavailable);
   }
+  if (!raw) return [];
 
   try {
-    return (await res.json()) as AuthApiResponse;
+    const accounts = JSON.parse(raw) as unknown;
+    if (
+      !Array.isArray(accounts) ||
+      accounts.some(
+        (account) =>
+          !account ||
+          typeof account.id !== "string" ||
+          typeof account.email !== "string" ||
+          typeof account.passwordSalt !== "string" ||
+          typeof account.passwordHash !== "string"
+      )
+    ) {
+      throw new Error("Invalid account data");
+    }
+    return accounts as LocalAccount[];
   } catch {
-    throw new Error(getCopy(language).auth.errors.invalidServerResponse);
+    throw new Error(getCopy(language).auth.errors.localAccountDataInvalid);
   }
 }
 
-function requireAuthenticatedResponse(
-  data: AuthApiResponse,
-  language: Language
-): asserts data is AuthApiResponse & { token: string; state: AppState } {
-  if (
-    typeof data.token !== "string" ||
-    !data.state ||
-    typeof data.state.user?.id !== "string"
-  ) {
-    throw new Error(getCopy(language).auth.errors.invalidServerResponse);
+function saveLocalAccounts(accounts: LocalAccount[], language: Language): void {
+  try {
+    localStorage.setItem(LOCAL_ACCOUNTS_KEY, JSON.stringify(accounts));
+  } catch {
+    throw new Error(getCopy(language).auth.errors.localStorageUnavailable);
   }
+}
+
+function getCrypto(language: Language): Crypto {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error(getCopy(language).auth.errors.localCryptoUnavailable);
+  }
+  return globalThis.crypto;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function hashPassword(password: string, salt: Uint8Array, language: Language): Promise<string> {
+  const cryptoApi = getCrypto(language);
+  const saltBuffer = new ArrayBuffer(salt.byteLength);
+  new Uint8Array(saltBuffer).set(salt);
+  const key = await cryptoApi.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const bits = await cryptoApi.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: saltBuffer,
+      iterations: PASSWORD_HASH_ITERATIONS,
+      hash: "SHA-256",
+    },
+    key,
+    256
+  );
+  return bytesToHex(new Uint8Array(bits));
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function passwordsMatch(actual: string, expected: string): boolean {
+  if (actual.length !== expected.length) return false;
+  let difference = 0;
+  for (let i = 0; i < actual.length; i++) {
+    difference |= actual.charCodeAt(i) ^ expected.charCodeAt(i);
+  }
+  return difference === 0;
+}
+
+function createSalt(language: Language): Uint8Array {
+  const salt = new Uint8Array(16);
+  getCrypto(language).getRandomValues(salt);
+  return salt;
+}
+
+function createLocalUserState(account: LocalAccount, language: Language): AppState {
+  const emptyState = createEmptyUnauthenticatedState(language);
+  return normalizeAppState({
+    ...emptyState,
+    isAuthenticated: true,
+    user: {
+      ...emptyState.user,
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      createdAt: account.createdAt,
+    },
+  });
+}
+
+async function activateLocalAccount(
+  account: LocalAccount,
+  language: Language
+): Promise<{ token: string; state: AppState }> {
+  const storedState = await loadUserIndexedDbState(account.id);
+  const state = storedState?.state || createLocalUserState(account, language);
+  setActiveSession({ token: LOCAL_SESSION_TOKEN, userId: account.id });
+  if (getActiveSession()?.userId !== account.id) {
+    throw new Error(getCopy(language).auth.errors.localStorageUnavailable);
+  }
+  await idbSaveUserState(account.id, { ...state, isAuthenticated: true });
+  return { token: LOCAL_SESSION_TOKEN, state: { ...state, isAuthenticated: true } };
 }
 
 export async function signupAccount(params: {
@@ -247,20 +350,24 @@ export async function signupAccount(params: {
   password: string;
   language: Language;
 }): Promise<{ token: string; state: AppState }> {
-  const res = await fetch("/api/auth/signup", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  const data = await readAuthApiResponse(res, params.language);
-  if (!res.ok) {
-    throw new Error(data.error || "Sign up failed.");
+  const accounts = readLocalAccounts(params.language);
+  const email = params.email.trim().toLowerCase();
+  if (accounts.some((account) => account.email.toLowerCase() === email)) {
+    throw new Error(getCopy(params.language).auth.errors.accountAlreadyExists);
   }
-  requireAuthenticatedResponse(data, params.language);
-  const fullState = normalizeAppState({ ...data.state, isAuthenticated: true });
-  setActiveSession({ token: data.token, userId: fullState.user.id });
-  await idbSaveUserState(fullState.user.id, fullState, new Date().toISOString());
-  return { token: data.token, state: fullState };
+
+  const salt = createSalt(params.language);
+  const account: LocalAccount = {
+    id: `user_${getCrypto(params.language).randomUUID()}`,
+    name: params.name.trim(),
+    email,
+    createdAt: getTodayISO(),
+    passwordSalt: bytesToHex(salt),
+    passwordHash: await hashPassword(params.password, salt, params.language),
+  };
+  accounts.push(account);
+  saveLocalAccounts(accounts, params.language);
+  return activateLocalAccount(account, params.language);
 }
 
 export async function loginAccount(params: {
@@ -268,20 +375,23 @@ export async function loginAccount(params: {
   password: string;
   language: Language;
 }): Promise<{ token: string; state: AppState }> {
-  const res = await fetch("/api/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  const data = await readAuthApiResponse(res, params.language);
-  if (!res.ok) {
-    throw new Error(data.error || "Log in failed.");
+  const email = params.email.trim().toLowerCase();
+  const account = readLocalAccounts(params.language).find(
+    (candidate) => candidate.email.toLowerCase() === email
+  );
+  if (!account) {
+    throw new Error(getCopy(params.language).auth.errors.invalidCredentials);
   }
-  requireAuthenticatedResponse(data, params.language);
-  const fullState = normalizeAppState({ ...data.state, isAuthenticated: true });
-  setActiveSession({ token: data.token, userId: fullState.user.id });
-  await idbSaveUserState(fullState.user.id, fullState, new Date().toISOString());
-  return { token: data.token, state: fullState };
+
+  const hash = await hashPassword(
+    params.password,
+    hexToBytes(account.passwordSalt),
+    params.language
+  );
+  if (!passwordsMatch(hash, account.passwordHash)) {
+    throw new Error(getCopy(params.language).auth.errors.invalidCredentials);
+  }
+  return activateLocalAccount(account, params.language);
 }
 
 export async function resetAccountPassword(params: {
@@ -289,15 +399,29 @@ export async function resetAccountPassword(params: {
   newPassword: string;
   language: Language;
 }): Promise<void> {
-  const res = await fetch("/api/auth/reset-password", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  const data = await readAuthApiResponse(res, params.language);
-  if (!res.ok) {
-    throw new Error(data.error || "Password reset failed.");
+  const accounts = readLocalAccounts(params.language);
+  const accountIndex = accounts.findIndex(
+    (candidate) => candidate.email.toLowerCase() === params.email.trim().toLowerCase()
+  );
+  if (accountIndex < 0) {
+    throw new Error(getCopy(params.language).auth.errors.accountNotFound);
   }
+
+  const salt = createSalt(params.language);
+  accounts[accountIndex] = {
+    ...accounts[accountIndex],
+    passwordSalt: bytesToHex(salt),
+    passwordHash: await hashPassword(params.newPassword, salt, params.language),
+  };
+  saveLocalAccounts(accounts, params.language);
+}
+
+export async function deleteLocalAccount(userId: string, language: Language): Promise<void> {
+  const accounts = readLocalAccounts(language).filter((account) => account.id !== userId);
+  saveLocalAccounts(accounts, language);
+  await idbClearUserQueue(userId);
+  await idbRemoveUserState(userId);
+  setActiveSession(null);
 }
 
 export async function fetchServerUserState(token: string): Promise<AppState | null> {

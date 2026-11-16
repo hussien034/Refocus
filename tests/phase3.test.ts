@@ -16,7 +16,13 @@ import {
 import { buildSmartLocalReply, CoachContextPayload } from "../server/coachEngine";
 import { mergeSyncOperationsIntoState, PersistedUserState } from "../server/userStore";
 import { TRANSLATIONS } from "../src/i18n/translations";
-import { loginAccount } from "../src/services/storageService";
+import {
+  getActiveSession,
+  loginAccount,
+  resetAccountPassword,
+  signupAccount,
+} from "../src/services/storageService";
+import { idbSaveUserState } from "../src/services/storage/indexedDb";
 import { AppState, Habit } from "../src/types/refocus";
 
 function buildBaseAppState(todayISO: string = "2026-06-17"): AppState {
@@ -564,21 +570,97 @@ test("Server sync preserves existing sessions/habits on onboarding preference up
 // 7. EN vs AR TRANSLATION KEY PARITY AUDIT
 // =========================================================================
 
-test("login explains when a static host returns HTML instead of the account API", async () => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response("<html><body>Not found</body></html>", {
-      status: 404,
-      headers: { "Content-Type": "text/html" },
-    });
+test("local accounts support signup, isolated login, and password reset without an API", async () => {
+  const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    },
+  });
 
   try {
+    const created = await signupAccount({
+      name: "Local User",
+      email: "local@example.com",
+      password: "passphrase",
+      language: "en",
+    });
+    const accountId = created.state.user.id;
+    assert.ok(accountId);
+    assert.equal(created.token, "local");
+    assert.equal(getActiveSession()?.userId, accountId);
+
+    const accounts = JSON.parse(storage.get("refocus_local_accounts_v1") || "[]") as Array<{
+      passwordHash: string;
+      passwordSalt: string;
+    }>;
+    assert.equal(accounts.length, 1);
+    assert.notEqual(accounts[0].passwordHash, "passphrase");
+    assert.ok(accounts[0].passwordSalt);
+
+    await idbSaveUserState(accountId, {
+      ...created.state,
+      onboarding: { ...created.state.onboarding, dailyFocusTarget: 60 },
+    });
+
     await assert.rejects(
-      loginAccount({ email: "user@example.com", password: "password", language: "ar" }),
-      new RegExp(TRANSLATIONS.ar.auth.errors.accountServiceUnavailable)
+      signupAccount({
+        name: "Duplicate",
+        email: "LOCAL@example.com",
+        password: "passphrase",
+        language: "en",
+      }),
+      /already exists/
+    );
+    await assert.rejects(
+      loginAccount({ email: "local@example.com", password: "wrongpass", language: "en" }),
+      new RegExp(TRANSLATIONS.en.auth.errors.invalidCredentials)
+    );
+
+    const secondAccount = await signupAccount({
+      name: "Another User",
+      email: "another@example.com",
+      password: "passphrase",
+      language: "en",
+    });
+    assert.notEqual(secondAccount.state.user.id, accountId);
+    assert.equal(secondAccount.state.onboarding.dailyFocusTarget, 25);
+
+    const loggedIn = await loginAccount({
+      email: "LOCAL@example.com",
+      password: "passphrase",
+      language: "en",
+    });
+    assert.equal(loggedIn.state.user.id, accountId);
+    assert.equal(loggedIn.state.onboarding.dailyFocusTarget, 60);
+
+    await resetAccountPassword({
+      email: "local@example.com",
+      newPassword: "newpassphrase",
+      language: "en",
+    });
+    await assert.rejects(
+      loginAccount({ email: "local@example.com", password: "passphrase", language: "en" }),
+      new RegExp(TRANSLATIONS.en.auth.errors.invalidCredentials)
+    );
+    assert.equal(
+      (await loginAccount({
+        email: "local@example.com",
+        password: "newpassphrase",
+        language: "en",
+      })).state.user.id,
+      accountId
     );
   } finally {
-    globalThis.fetch = originalFetch;
+    if (originalStorage) {
+      Object.defineProperty(globalThis, "localStorage", originalStorage);
+    } else {
+      Reflect.deleteProperty(globalThis, "localStorage");
+    }
   }
 });
 

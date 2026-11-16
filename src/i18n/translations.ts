@@ -44,8 +44,8 @@ export const TRANSLATIONS = {
       signInTitle: "Welcome back",
       signUpTitle: "Create your calm space",
       forgotTitle: "Reset your password",
-      signInSubtitle: "Sign in to load your saved focus sessions, habits, and AI Coach history.",
-      signUpSubtitle: "Create your personal account — your data is saved privately per user.",
+      signInSubtitle: "Sign in to load the focus sessions, habits, and AI Coach history saved in this browser.",
+      signUpSubtitle: "Create a personal profile — your data is stored separately on this device.",
       forgotSubtitle: "Enter your account email and choose a new password.",
       nameLabel: "First name",
       namePlaceholder: "Your name",
@@ -62,16 +62,21 @@ export const TRANSLATIONS = {
       submitForgot: "Update Password",
       switchToSignUp: "New to ReFocus? Create an account",
       switchToLogin: "Already have an account? Log in",
-      localJsonNote: "Each user account stores its own isolated data in JSON storage and local browser cache.",
+      localJsonNote: "Accounts and progress are stored only in this browser and are not synced across devices.",
       resetSent: "Your password has been updated. You can now log in with your new password.",
       errors: {
         nameRequired: "Please enter your first name.",
         emailInvalid: "Please enter a valid email address.",
         passwordShort: "Password must be at least 6 characters.",
-        accountServiceUnavailable:
-          "The account service isn't available at this address. GitHub Pages hosts only the app frontend; sign in using the full-stack app URL.",
-        invalidServerResponse:
-          "The account service returned an invalid response. Please try again or contact support.",
+        accountAlreadyExists: "An account with this email already exists on this device.",
+        invalidCredentials: "The email or password is incorrect.",
+        accountNotFound: "No account with this email exists on this device.",
+        localStorageUnavailable:
+          "This browser could not save your account. Check that browser storage is available and try again.",
+        localAccountDataInvalid:
+          "Saved account data could not be read. Clear this site's browser data only if you no longer need its local accounts.",
+        localCryptoUnavailable:
+          "Secure password storage is unavailable in this browser. Please use an up-to-date browser over HTTPS.",
       },
     },
     onboarding: {
@@ -615,8 +620,9 @@ export const TRANSLATIONS = {
       notifFocus: "Focus session reminders",
       notifEvening: "Evening screen wind-down",
       notifHabits: "Daily habit check-ins",
-      privacyTitle: "Privacy & JSON Data Control",
-      privacyNote: "Your data belongs to your account and is stored per user in JSON storage plus offline browser cache. Private data is never cached in shared service worker caches.",
+      privacyTitle: "Privacy & Local Data Control",
+      privacyNote: "Your account and progress are stored only in this browser on this device. They are not uploaded or synced to other devices. Clearing browser data will remove local accounts and data.",
+      localOnlyStorage: "Saved on this device",
       exportData: "Export My Data (JSON)",
       importData: "Import JSON Backup",
       importSuccess: "Your JSON data backup was restored to your account.",
@@ -716,8 +722,8 @@ export const TRANSLATIONS = {
       signInTitle: "مرحباً بعودتك",
       signUpTitle: "أنشئ مساحتك الهادئة",
       forgotTitle: "تعيين كلمة مرور جديدة",
-      signInSubtitle: "سجّل الدخول لتحميل جلسات تركيزك وعاداتك ومحادثات المدرب المحفوظة.",
-      signUpSubtitle: "أنشئ حسابك الشخصي — تُحفظ بياناتك بشكل مستقل لكل مستخدم.",
+      signInSubtitle: "سجّل الدخول لتحميل جلسات التركيز والعادات ومحادثات المدرب المحفوظة في هذا المتصفح.",
+      signUpSubtitle: "أنشئ ملفك الشخصي — تُحفظ بياناتك بشكل مستقل على هذا الجهاز.",
       forgotSubtitle: "أدخل بريدك الإلكتروني المسجل واختر كلمة مرور جديدة.",
       nameLabel: "الاسم الأول",
       namePlaceholder: "اسمك",
@@ -734,16 +740,21 @@ export const TRANSLATIONS = {
       submitForgot: "تحديث كلمة المرور",
       switchToSignUp: "جديد في ReFocus؟ أنشئ حساباً",
       switchToLogin: "لديك حساب بالفعل؟ سجّل الدخول",
-      localJsonNote: "كل حساب يحفظ بياناته الخاصة بشكل مستقل في ملف JSON وفي التخزين المحلي للمتصفح.",
+      localJsonNote: "تُحفظ الحسابات والبيانات في هذا المتصفح فقط ولا تتم مزامنتها بين الأجهزة.",
       resetSent: "تم تحديث كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.",
       errors: {
         nameRequired: "يرجى إدخال اسمك الأول.",
         emailInvalid: "يرجى إدخال بريد إلكتروني صحيح.",
         passwordShort: "يجب أن تكون كلمة المرور 6 أحرف على الأقل.",
-        accountServiceUnavailable:
-          "خدمة الحسابات غير متاحة على هذا الرابط. يستضيف GitHub Pages واجهة التطبيق فقط؛ سجّل الدخول من رابط النسخة المتصلة بالخادم.",
-        invalidServerResponse:
-          "أعادت خدمة الحسابات استجابة غير صالحة. يرجى المحاولة مجدداً أو التواصل مع الدعم.",
+        accountAlreadyExists: "يوجد حساب بهذا البريد الإلكتروني على هذا الجهاز بالفعل.",
+        invalidCredentials: "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+        accountNotFound: "لا يوجد حساب بهذا البريد الإلكتروني على هذا الجهاز.",
+        localStorageUnavailable:
+          "تعذّر على هذا المتصفح حفظ الحساب. تحقق من إتاحة مساحة التخزين في المتصفح ثم حاول مجدداً.",
+        localAccountDataInvalid:
+          "تعذّرت قراءة بيانات الحساب المحفوظة. لا تمسح بيانات الموقع من المتصفح إلا إذا لم تعد بحاجة إلى حساباته المحلية.",
+        localCryptoUnavailable:
+          "التخزين الآمن لكلمات المرور غير متاح في هذا المتصفح. استخدم متصفحاً حديثاً عبر اتصال HTTPS.",
       },
     },
     onboarding: {
@@ -1287,8 +1298,9 @@ export const TRANSLATIONS = {
       notifFocus: "تذكيرات جلسات التركيز",
       notifEvening: "تهدئة الشاشة مساءً",
       notifHabits: "تنبيهات العادات اليومية",
-      privacyTitle: "الخصوصية والتحكم بملف JSON",
-      privacyNote: "بياناتك خاصة بحسابك وتُحفظ لكل مستخدم بشكل مستقل في تخزين JSON وذاكرة المتصفح دون مشاركتها في ذاكرة الخدمة العامة.",
+      privacyTitle: "الخصوصية والتحكم بالبيانات المحلية",
+      privacyNote: "يُحفظ حسابك وبياناتك في هذا المتصفح على هذا الجهاز فقط، ولا تُرفع أو تُزامن إلى أجهزة أخرى. مسح بيانات المتصفح سيحذف الحسابات والبيانات المحلية.",
+      localOnlyStorage: "محفوظ على هذا الجهاز",
       exportData: "تصدير بياناتي (JSON)",
       importData: "استيراد نسخة JSON",
       importSuccess: "تمت استعادة بيانات ملف JSON إلى حسابك بنجاح.",

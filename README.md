@@ -28,10 +28,10 @@ npm run lint
 npm run build
 ```
 
-`.env` files, local data, dependencies, and generated build output are excluded from Git. Never commit API keys or other secrets.
+Accounts and app progress are stored locally in the browser on the current device. They are not uploaded or synchronized across devices, and clearing this site's browser data removes them. Passwords are stored as salted hashes. `.env` files, local data, dependencies, and generated build output are excluded from Git. Never commit API keys or other secrets.
 
 ## GitHub Pages
 
-The workflow in `.github/workflows/deploy-pages.yml` tests and builds the app, then deploys the `dist` output whenever changes are pushed to `main`. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**.
+The workflow in `.github/workflows/deploy-pages.yml` tests and builds the app, then deploys the `dist` output whenever changes are pushed to `main`. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**. Local account creation and sign-in work on GitHub Pages and do not require a backend.
 
-GitHub Pages hosts only the static frontend. Account authentication, server sync, and Gemini-backed coach requests require the Express server; deploy the full-stack app to a Node.js host to use those endpoints.
+The optional Gemini-backed coach requires the Express server and a configured `GEMINI_API_KEY`; the app can use its local coach fallback without a server.
